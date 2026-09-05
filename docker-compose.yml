@@ -1,0 +1,93 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: fawu
+      MYSQL_USER: fawu
+      MYSQL_PASSWORD: ${DB_PASSWORD:-fawu-dev-password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root-dev-password}
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci"]
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root-dev-password}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-unsafe-compose-development-key}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-false}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      DB_ENGINE: mysql
+      DB_NAME: fawu
+      DB_USER: fawu
+      DB_PASSWORD: ${DB_PASSWORD:-fawu-dev-password}
+      DB_HOST: mysql
+      DB_PORT: 3306
+      REDIS_URL: redis://redis:6379/0
+      CACHE_URL: redis://redis:6379/1
+      DJANGO_SECURE_SSL_REDIRECT: ${DJANGO_SECURE_SSL_REDIRECT:-false}
+    volumes:
+      - contract_media:/app/backend/media
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["celery", "-A", "fawu", "worker", "--loglevel=INFO"]
+    working_dir: /app/backend
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-unsafe-compose-development-key}
+      DJANGO_DEBUG: "false"
+      DB_ENGINE: mysql
+      DB_NAME: fawu
+      DB_USER: fawu
+      DB_PASSWORD: ${DB_PASSWORD:-fawu-dev-password}
+      DB_HOST: mysql
+      REDIS_URL: redis://redis:6379/0
+      CACHE_URL: redis://redis:6379/1
+    depends_on:
+      api:
+        condition: service_started
+
+  document-api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["uvicorn", "services.document_api.main:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "2"]
+    working_dir: /app
+    expose:
+      - "8001"
+
+  web:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
+volumes:
+  mysql_data:
+  redis_data:
+  contract_media:
