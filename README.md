@@ -19,6 +19,8 @@
 
 要求安装 `uv`、Node.js 20+。仓库已经锁定 Python 与前端依赖。
 
+最简单的方式是双击仓库根目录的 `start.bat`。脚本会自动安装缺失的依赖、执行数据库迁移、初始化演示数据，然后启动前端、Django 后端和文档服务。演示账号为 `admin`，密码为 `admin123`。
+
 ```powershell
 $env:UV_CACHE_DIR="$PWD\.uv-cache"
 uv sync --extra dev --python 3.13

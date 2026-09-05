@@ -22,11 +22,20 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--username", default="admin")
+        parser.add_argument(
+            "--allow-insecure-password",
+            action="store_true",
+            help="仅允许本地演示环境使用 8 至 9 位密码",
+        )
 
     def handle(self, *args, **options):
         password = os.getenv("FAWU_BOOTSTRAP_PASSWORD")
-        if not password or len(password) < 10:
-            raise CommandError("请先设置至少 10 位的 FAWU_BOOTSTRAP_PASSWORD 环境变量")
+        minimum_length = 8 if options["allow_insecure_password"] else 10
+        if not password or len(password) < minimum_length:
+            raise CommandError(
+                f"请先设置至少 {minimum_length} 位的 "
+                "FAWU_BOOTSTRAP_PASSWORD 环境变量"
+            )
 
         user_model = get_user_model()
         user, _ = user_model.objects.get_or_create(username=options["username"])
